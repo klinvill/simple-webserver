@@ -8,12 +8,14 @@
 #include <string>
 
 #include "content_type.h"
+#include "request_type.h"
+#include "util_types.h"
 
 
-class HttpHeader {
+class HttpResponseHeader {
 public:
-    HttpHeader(int status, std::string status_string, ContentType content_type, int content_length);
-    operator std::string() const;
+    HttpResponseHeader(int status, std::string status_string, ContentType content_type, int content_length);
+    explicit operator std::string() const;
 
     int status;
     std::string status_string;
@@ -21,12 +23,33 @@ public:
     int content_length;
 };
 
-class HttpMessage {
+class HttpResponseMessage {
 public:
-    HttpMessage(int status, std::string status_string, ContentType content_type, std::string content);
-    operator std::string() const;
+    HttpResponseMessage(int status, std::string status_string, ContentType content_type, std::string content);
+    explicit operator std::string() const;
 
-    HttpHeader header;
+    HttpResponseHeader header;
+    std::string content;
+};
+
+class HttpRequestHeader {
+public:
+    explicit HttpRequestHeader(const std::string& data);
+
+    RequestType type;
+    std::string resource;
+    int content_length;
+
+private:
+    static std::string get_next_field(const std::string& data, unsigned long& offset);
+    static KeyValue get_next_key_value(const std::string& data, unsigned long& offset);
+};
+
+class HttpRequestMessage {
+public:
+    explicit HttpRequestMessage(const std::string& data);
+
+    HttpRequestHeader header;
     std::string content;
 };
 

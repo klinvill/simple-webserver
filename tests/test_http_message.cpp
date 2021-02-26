@@ -9,18 +9,54 @@
 #include "../src/http_message.h"
 
 
-TEST(HttpMessageTest, MessageBuildsHeaderFromContentLength) {
+TEST(HttpResponseMessageTest, MessageBuildsHeaderFromContentLength) {
     std::string test_content = "Hello world!";
-    HttpMessage test_message = HttpMessage(200, "OK", ContentType::txt, test_content);
+    HttpResponseMessage test_message = HttpResponseMessage(200, "OK", ContentType::txt, test_content);
 
     EXPECT_EQ(test_message.header.content_length, test_content.length());
 }
 
-TEST(HttpMessageTest, MessageString) {
+TEST(HttpResponseMessageTest, MessageString) {
     std::string test_content = "Hello world!";
-    HttpMessage test_message = HttpMessage(200, "OK", ContentType::txt, test_content);
+    HttpResponseMessage test_message = HttpResponseMessage(200, "OK", ContentType::txt, test_content);
 
     std::string expected_string ="HTTP/1.1 200 OK\r\nContent-Type: text/txt\r\nContent-Length: 12\r\n\r\nHello world!\r\n";
 
     EXPECT_EQ(std::string(test_message), expected_string);
+}
+
+
+TEST(HttpRequestMessageTest, ParseGetMessageFromString) {
+    std::string test_string ="GET /hello/world HTTP/1.1\r\n\r\n";
+    HttpRequestMessage test_message = HttpRequestMessage(test_string);
+    std::string expected_resource = "/hello/world";
+
+    EXPECT_EQ(test_message.header.type, RequestType(RequestTypeEnum::GET));
+    EXPECT_EQ(test_message.header.resource, expected_resource);
+    EXPECT_EQ(test_message.header.content_length, 0);
+    EXPECT_EQ(test_message.content, "");
+}
+
+TEST(HttpRequestMessageTest, ParsePostMessageFromString) {
+    std::string test_string ="POST /hello/world HTTP/1.1\r\nContent-Length: 12\r\n\r\nHello world!\r\n";
+    HttpRequestMessage test_message = HttpRequestMessage(test_string);
+    std::string expected_resource = "/hello/world";
+    std::string expected_content = "Hello world!";
+
+    EXPECT_EQ(test_message.header.type, RequestType(RequestTypeEnum::POST));
+    EXPECT_EQ(test_message.header.resource, expected_resource);
+    EXPECT_EQ(test_message.header.content_length, 12);
+    EXPECT_EQ(test_message.content, expected_content);
+}
+
+TEST(HttpRequestMessageTest, ParseMessageWithNewlinesInContent) {
+    std::string test_string ="POST /hello/world HTTP/1.1\r\nContent-Length: 13\r\n\r\nHello\r\nworld!\r\n";
+    HttpRequestMessage test_message = HttpRequestMessage(test_string);
+    std::string expected_resource = "/hello/world";
+    std::string expected_content = "Hello\r\nworld!";
+
+    EXPECT_EQ(test_message.header.type, RequestType(RequestTypeEnum::POST));
+    EXPECT_EQ(test_message.header.resource, expected_resource);
+    EXPECT_EQ(test_message.header.content_length, 13);
+    EXPECT_EQ(test_message.content, expected_content);
 }
