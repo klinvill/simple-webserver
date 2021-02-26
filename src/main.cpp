@@ -3,6 +3,11 @@
 #include <sys/socket.h>  /* for socket use */
 #include <netinet/in.h>
 #include <thread>
+#include <sstream>
+#include <iostream>
+
+#include "http_message.h"
+
 
 #define MAXBUF   8192  /* max I/O buffer size */
 #define LISTENQ  1024  /* second argument to listen() */
@@ -48,14 +53,18 @@ void echo(int connfd)
 {
     size_t n;
     char buf[MAXBUF];
-    char httpmsg[MAXBUF] = "HTTP/1.1 200 Document Follows\r\nContent-Type:text/html\r\nContent-Length:32\r\n\r\n<html><h1>Hello CSCI4273 Course!</h1></html>";
 
     n = read(connfd, buf, MAXBUF);
     printf("server received the following request:\n%s\n",buf);
-    strncpy(buf, httpmsg, strlen(httpmsg));
-    buf[MAXBUF-1] = 0;
-    printf("server returning a http message with the following content.\n%s\n",buf);
-    write(connfd, buf, strlen(buf));
+
+    HttpRequestMessage request = HttpRequestMessage(buf);
+    int response_status = (request.header.type == RequestTypeEnum::GET) ? 200 : 500;
+    std::stringstream response_message;
+    response_message << "<html><h1>" << request.header.resource << "</h1></html>";
+    HttpResponseMessage response = HttpResponseMessage(response_status, "OK", ContentType::html, response_message.str());
+    std::string response_string = std::string(response);
+    std::cout << "server returning a http message with the following content.\n" << response_string << "\n";
+    write(connfd, response_string.c_str(), response_string.length());
 }
 
 /*
