@@ -15,7 +15,7 @@ HttpHeader::HttpHeader(int status, std::string status_string, ContentType conten
 
 HttpHeader::operator std::string() const {
     std::stringstream buf;
-    buf = std::stringstream("HTTP/") << HTTP_VERSION << " " << this->status << " " << this->status_string << SEPARATOR
+    buf = std::stringstream() << "HTTP/" << HTTP_VERSION << " " << this->status << " " << this->status_string << SEPARATOR
         << "Content-Type: " << to_string(this->content_type) << SEPARATOR
         << "Content-Length: " << this->content_length << SEPARATOR;
 
@@ -28,7 +28,7 @@ HttpMessage::HttpMessage(int status, std::string status_string, ContentType cont
 
 HttpMessage::operator std::string() const {
     std::stringstream buf;
-    buf = std::stringstream(std::string(header)) << SEPARATOR
+    buf = std::stringstream() << std::string(this->header) << SEPARATOR
             << this->content << SEPARATOR;
     return buf.str();
 }

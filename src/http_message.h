@@ -15,7 +15,6 @@ public:
     HttpHeader(int status, std::string status_string, ContentType content_type, int content_length);
     operator std::string() const;
 
-private:
     int status;
     std::string status_string;
     ContentType content_type;
@@ -27,7 +26,6 @@ public:
     HttpMessage(int status, std::string status_string, ContentType content_type, std::string content);
     operator std::string() const;
 
-private:
     HttpHeader header;
     std::string content;
 };
