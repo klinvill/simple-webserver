@@ -13,19 +13,19 @@
 ContentType from_filename(std::string filename) {
     std::string extension = get_extension(filename);
 
-    if (filename.compare(".html") == 0)
+    if (filename == ".html")
             return ContentType::html;
-    else if (filename.compare(".txt") == 0)
+    else if (filename == ".txt")
             return ContentType::txt;
-    else if (filename.compare(".png") == 0)
+    else if (filename == ".png")
             return ContentType::png;
-    else if (filename.compare(".gif") == 0)
+    else if (filename == ".gif")
             return ContentType::gif;
-    else if (filename.compare(".jpg") == 0)
+    else if (filename == ".jpg")
             return ContentType::jpg;
-    else if (filename.compare(".css") == 0)
+    else if (filename == ".css")
             return ContentType::css;
-    else if (filename.compare(".js") == 0)
+    else if (filename == ".js")
             return ContentType::js;
     else
         throw std::invalid_argument("Unrecognized file extension, cannot determine ContentType");
