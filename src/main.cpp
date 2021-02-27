@@ -5,6 +5,8 @@
 #include <thread>
 #include <sstream>
 #include <iostream>
+#include <fstream>
+#include <sys/stat.h>
 
 #include "http_message.h"
 
@@ -13,8 +15,10 @@
 #define LISTENQ  1024  /* second argument to listen() */
 
 int open_listenfd(int port);
-void echo(int connfd);
+void process_request(int connfd);
 void handle_connection(void * vargp);
+void handle_get(const HttpRequestMessage& message, int connfd);
+void handle_post(const HttpRequestMessage& message, int connfd);
 
 int main(int argc, char **argv)
 {
@@ -42,14 +46,21 @@ void handle_connection(void * vargp)
 {
     int connfd = *((int *)vargp);
     free(vargp);
-    echo(connfd);
+    process_request(connfd);
     close(connfd);
 }
 
-/*
- * echo - read and echo text lines until client closes connection
- */
-void echo(int connfd)
+void send_response(HttpResponseMessage& response, int connfd) {
+    std::string response_string = std::string(response);
+    write(connfd, response_string.c_str(), response_string.length());
+}
+
+void send_error(int connfd) {
+    HttpResponseMessage response(500, "Internal Server Error", ContentType::txt, std::string());
+    send_response(response, connfd);
+}
+
+void process_request(int connfd)
 {
     size_t n;
     char buf[MAXBUF];
@@ -58,13 +69,91 @@ void echo(int connfd)
     printf("server received the following request:\n%s\n",buf);
 
     HttpRequestMessage request = HttpRequestMessage(buf);
-    int response_status = (request.header.type == RequestTypeEnum::GET) ? 200 : 500;
-    std::stringstream response_message;
-    response_message << "<html><h1>" << request.header.resource << "</h1></html>";
-    HttpResponseMessage response = HttpResponseMessage(response_status, "OK", ContentType::html, response_message.str());
-    std::string response_string = std::string(response);
-    std::cout << "server returning a http message with the following content.\n" << response_string << "\n";
-    write(connfd, response_string.c_str(), response_string.length());
+
+    if (request.header.type == RequestTypeEnum::GET)
+        handle_get(request, connfd);
+    else
+        send_error(connfd);
+}
+
+std::string join_filepath(const std::string& dir, const std::string& file) {
+    std::stringstream joined_path;
+    joined_path << dir;
+
+    if (dir.back() != '/')
+        joined_path << '/';
+
+    if (file.front() == '/')
+        joined_path << file.substr(1);
+    else
+        joined_path << file;
+
+    return joined_path.str();
+}
+
+// Throws runtime_error
+std::ifstream open_default(const std::string& directory) {
+    std::ifstream dot_html_ifs(join_filepath(directory, "index.html"), std::ifstream::in);
+    if (!dot_html_ifs.fail())
+        return dot_html_ifs;
+    std::cerr << "Could not open " << join_filepath(directory, "index.html") << "\n";
+    dot_html_ifs.close();
+
+    std::ifstream dot_htm_ifs(join_filepath(directory, "index.htm"), std::ifstream::in);
+    if (!dot_htm_ifs.fail())
+        return dot_htm_ifs;
+    std::cerr << "Could not open " << join_filepath(directory, "index.htm") << "\n";
+    dot_htm_ifs.close();
+
+    throw std::runtime_error("Could not find a file to open");
+}
+
+bool is_file(const std::string& filepath) {
+    struct stat stat_info;
+    stat(filepath.c_str(), &stat_info);
+
+    return S_ISREG(stat_info.st_mode);
+}
+
+long get_file_size(const std::string& filepath) {
+    struct stat stat_info;
+    stat(filepath.c_str(), &stat_info);
+
+    return stat_info.st_size;
+}
+
+void handle_get(const HttpRequestMessage& message, int connfd) {
+    // TODO: should the content directory be specified? Or default to www?
+    std::string relative_resource = join_filepath("www/", message.header.resource);
+    std::ifstream ifs;
+
+    std::string filename = relative_resource;
+    if (is_file(relative_resource))
+        ifs.open(relative_resource, std::ifstream::in);
+    else {
+        try {
+            ifs = open_default(relative_resource);
+        } catch (const std::runtime_error &err) {
+            std::cerr << err.what();
+            send_error(connfd);
+            return;
+        }
+        filename = "index.html";
+    }
+
+    std::string response_message;
+
+    // pre-allocate buffer
+    ifs.seekg(0, ifs.end);
+    response_message.reserve(ifs.tellg());
+    ifs.seekg(0, ifs.beg);
+
+    response_message.assign(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
+
+    HttpResponseMessage response(200, "OK", from_filename(filename), response_message);
+    send_response(response, connfd);
+
+    ifs.close();
 }
 
 /*
