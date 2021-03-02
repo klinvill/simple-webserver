@@ -9,10 +9,13 @@
 #include <sys/stat.h>
 
 #include "http_message.h"
+#include "file_helpers.h"
 
 
 #define MAXBUF   8192  /* max I/O buffer size */
 #define LISTENQ  1024  /* second argument to listen() */
+
+#define CONTENT_ROOT "www/"     // Content directory rooted at www/
 
 int open_listenfd(int port);
 void process_request(int connfd);
@@ -72,6 +75,8 @@ void process_request(int connfd)
 
     if (request.header.type == RequestTypeEnum::GET)
         handle_get(request, connfd);
+    else if (request.header.type == RequestTypeEnum::POST)
+        handle_post(request, connfd);
     else
         send_error(connfd);
 }
@@ -123,8 +128,8 @@ long get_file_size(const std::string& filepath) {
 }
 
 void handle_get(const HttpRequestMessage& message, int connfd) {
-    // TODO: should the content directory be specified? Or default to www?
-    std::string relative_resource = join_filepath("www/", message.header.resource);
+    // TODO: this allows for path traversal attacks, should fix
+    std::string relative_resource = join_filepath(CONTENT_ROOT, message.header.resource);
     std::ifstream ifs;
 
     std::string filename = relative_resource;
@@ -151,6 +156,43 @@ void handle_get(const HttpRequestMessage& message, int connfd) {
     response_message.assign(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
 
     HttpResponseMessage response(200, "OK", from_filename(filename), response_message);
+    send_response(response, connfd);
+
+    ifs.close();
+}
+
+void handle_post(const HttpRequestMessage& message, int connfd) {
+    // POST requests are only supported for .html files as per the homework instructions
+    if (get_extension(message.header.resource) != "html") {
+        send_error(connfd);
+        return;
+    }
+
+    std::string post_content_prefix = "<h1>POST DATA</h1><pre>";
+    std::string post_content_suffix = "</pre>";
+
+    std::string relative_resource = join_filepath(CONTENT_ROOT, message.header.resource);
+    std::ifstream ifs;
+
+    if (!is_file(relative_resource)) {
+        send_error(connfd);
+        return;
+    }
+
+    ifs.open(relative_resource, std::ifstream::in);
+
+    std::string file_contents;
+
+    // pre-allocate buffer
+    ifs.seekg(0, ifs.end);
+    file_contents.reserve(ifs.tellg());
+    ifs.seekg(0, ifs.beg);
+
+    file_contents.assign(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
+
+    // TODO: confirm that we should just put the post content before the loaded html file (as stated in the assignment)
+    HttpResponseMessage response(200, "OK", from_filename(relative_resource),
+                                 post_content_prefix + message.content + post_content_suffix + file_contents);
     send_response(response, connfd);
 
     ifs.close();
