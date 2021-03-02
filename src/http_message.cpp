@@ -6,18 +6,20 @@
 
 #include <sstream>
 
-#define FIELD_SEPARATOR " "
+
+#define FIELD_SEPARATORS " \r"
 #define KEY_VALUE_SEPARATOR ": "
 #define SEPARATOR "\r\n"
-#define HTTP_VERSION "1.1"
 
-HttpResponseHeader::HttpResponseHeader(int status, std::string status_string, ContentType content_type, int content_length)
-    : status(status), status_string(status_string), content_type(content_type), content_length(content_length)
+HttpResponseHeader::HttpResponseHeader(int status, std::string status_string, ContentType content_type,
+                                       int content_length, HttpVersion version)
+    : status(status), status_string(status_string), content_type(content_type), content_length(content_length),
+    version(version)
 {}
 
 HttpResponseHeader::operator std::string() const {
     std::stringstream buf;
-    buf = std::stringstream() << "HTTP/" << HTTP_VERSION << " " << this->status << " " << this->status_string << SEPARATOR
+    buf = std::stringstream() << std::string(this->version) << " " << this->status << " " << this->status_string << SEPARATOR
         << "Content-Type: " << to_string(this->content_type) << SEPARATOR
         << "Content-Length: " << this->content_length << SEPARATOR;
 
@@ -25,8 +27,9 @@ HttpResponseHeader::operator std::string() const {
 }
 
 
-HttpResponseMessage::HttpResponseMessage(int status, std::string status_string, ContentType content_type, std::string content)
-    : content(content), header(status, status_string, content_type, content.length())
+HttpResponseMessage::HttpResponseMessage(int status, std::string status_string, ContentType content_type,
+                                         std::string content, HttpVersion version)
+    : content(content), header(status, status_string, content_type, content.length(), version)
 {}
 
 HttpResponseMessage::operator std::string() const {
@@ -42,9 +45,9 @@ HttpResponseMessage::operator std::string() const {
 //
 // offset will be incremented by the number of bytes parsed to parse the type
 std::string HttpRequestHeader::get_next_field(const std::string& data, unsigned long& offset) {
-    int length = strcspn(&data.c_str()[offset], FIELD_SEPARATOR);
+    int length = strcspn(&data.c_str()[offset], FIELD_SEPARATORS);
     std::string field = data.substr(offset, length);
-    offset += length + strlen(FIELD_SEPARATOR);
+    offset += length + 1;
     return field;
 }
 
@@ -64,12 +67,13 @@ KeyValue HttpRequestHeader::get_next_key_value(const std::string& data, unsigned
 
 // TODO: currently I use a GET type as a placeholder until the data can be parsed, should avoid instantiating an object
 //  I just throw away
-HttpRequestHeader::HttpRequestHeader(const std::string& data) : type("GET") {
+HttpRequestHeader::HttpRequestHeader(const std::string& data) : type("GET"), version(HttpVersionEnum::HTTP_1_1) {
     unsigned long offset = 0;
     this->type = RequestType(this->get_next_field(data, offset));
     this->resource = this->get_next_field(data, offset);
+    this->version = HttpVersion(this->get_next_field(data, offset));
 
-    // We only care about the HTTP request type and resource, so we ignore any other information on the first line
+    // We care about the HTTP request type, resource, and version, ignoring any other information on the first line
     unsigned long headers_start = data.find(SEPARATOR) + strlen(SEPARATOR);
     unsigned long headers_end = data.find(std::string(SEPARATOR) + std::string(SEPARATOR));
 

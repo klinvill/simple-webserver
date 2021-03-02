@@ -8,24 +8,28 @@
 #include <string>
 
 #include "content_type.h"
+#include "http_version.h"
 #include "request_type.h"
 #include "util_types.h"
 
 
 class HttpResponseHeader {
 public:
-    HttpResponseHeader(int status, std::string status_string, ContentType content_type, int content_length);
+    HttpResponseHeader(int status, std::string status_string, ContentType content_type, int content_length,
+                       HttpVersion version);
     explicit operator std::string() const;
 
     int status;
     std::string status_string;
     ContentType content_type;
     int content_length;
+    HttpVersion version;
 };
 
 class HttpResponseMessage {
 public:
-    HttpResponseMessage(int status, std::string status_string, ContentType content_type, std::string content);
+    HttpResponseMessage(int status, std::string status_string, ContentType content_type, std::string content,
+                        HttpVersion version);
     explicit operator std::string() const;
 
     HttpResponseHeader header;
@@ -39,6 +43,7 @@ public:
     RequestType type;
     std::string resource;
     int content_length;
+    HttpVersion version;
 
 private:
     static std::string get_next_field(const std::string& data, unsigned long& offset);

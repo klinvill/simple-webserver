@@ -59,7 +59,8 @@ void send_response(HttpResponseMessage& response, int connfd) {
 }
 
 void send_error(int connfd) {
-    HttpResponseMessage response(500, "Internal Server Error", ContentType::txt, std::string());
+    HttpResponseMessage response(500, "Internal Server Error", ContentType::txt, std::string(),
+                                 HttpVersion(HttpVersionEnum::HTTP_1_1));
     send_response(response, connfd);
 }
 
@@ -71,14 +72,20 @@ void process_request(int connfd)
     n = read(connfd, buf, MAXBUF);
     printf("server received the following request:\n%s\n",buf);
 
-    HttpRequestMessage request = HttpRequestMessage(buf);
+    try {
+        HttpRequestMessage request = HttpRequestMessage(buf);
 
-    if (request.header.type == RequestTypeEnum::GET)
-        handle_get(request, connfd);
-    else if (request.header.type == RequestTypeEnum::POST)
-        handle_post(request, connfd);
-    else
+        if (request.header.type == RequestTypeEnum::GET)
+            handle_get(request, connfd);
+        else if (request.header.type == RequestTypeEnum::POST)
+            handle_post(request, connfd);
+        else
+            send_error(connfd);
+    } catch (const std::exception &err) {
+        std::cerr << err.what();
         send_error(connfd);
+        return;
+    }
 }
 
 std::string join_filepath(const std::string& dir, const std::string& file) {
@@ -155,7 +162,8 @@ void handle_get(const HttpRequestMessage& message, int connfd) {
 
     response_message.assign(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
 
-    HttpResponseMessage response(200, "OK", from_filename(filename), response_message);
+    HttpResponseMessage response(200, "OK", from_filename(filename), response_message,
+                                 message.header.version);
     send_response(response, connfd);
 
     ifs.close();
@@ -192,7 +200,8 @@ void handle_post(const HttpRequestMessage& message, int connfd) {
 
     // TODO: confirm that we should just put the post content before the loaded html file (as stated in the assignment)
     HttpResponseMessage response(200, "OK", from_filename(relative_resource),
-                                 post_content_prefix + message.content + post_content_suffix + file_contents);
+                                 post_content_prefix + message.content + post_content_suffix + file_contents,
+                                 message.header.version);
     send_response(response, connfd);
 
     ifs.close();
