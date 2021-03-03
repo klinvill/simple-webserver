@@ -38,7 +38,7 @@ std::string to_string(ContentType type) {
         case ContentType::html:
             return "text/html";
         case ContentType::txt:
-            return "text/txt";
+            return "text/plain";
         case ContentType::png:
             return "image/png";
         case ContentType::gif:
