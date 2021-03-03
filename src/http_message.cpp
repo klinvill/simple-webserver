@@ -12,9 +12,10 @@
 #define SEPARATOR "\r\n"
 
 HttpResponseHeader::HttpResponseHeader(int status, std::string status_string, ContentType content_type,
-                                       int content_length, HttpVersion version)
+                                       int content_length, HttpVersion version,
+                                       ConnectionDirective connection_directive)
     : status(status), status_string(status_string), content_type(content_type), content_length(content_length),
-    version(version)
+    version(version), connection_directive(connection_directive)
 {}
 
 HttpResponseHeader::operator std::string() const {
@@ -23,13 +24,17 @@ HttpResponseHeader::operator std::string() const {
         << "Content-Type: " << to_string(this->content_type) << SEPARATOR
         << "Content-Length: " << this->content_length << SEPARATOR;
 
+    if (this->connection_directive.directive != ConnectionDirectiveEnum::EMPTY)
+        buf << "Connection: " << std::string(this->connection_directive) << SEPARATOR;
+
     return buf.str();
 }
 
 
 HttpResponseMessage::HttpResponseMessage(int status, std::string status_string, ContentType content_type,
-                                         std::string content, HttpVersion version)
-    : content(content), header(status, status_string, content_type, content.length(), version)
+                                         std::string content, HttpVersion version,
+                                         ConnectionDirective connection_directive)
+    : content(content), header(status, status_string, content_type, content.length(), version, connection_directive)
 {}
 
 HttpResponseMessage::operator std::string() const {
@@ -79,16 +84,20 @@ HttpRequestHeader::HttpRequestHeader(const std::string& data) : type("GET"), ver
 
     // If no Content-Length header is specified, default to 0
     this->content_length = 0;
+    // If no Connection header is specified, we use the default EMPTY value
+    this->connection_directive = ConnectionDirective();
 
     assert(headers_start >= offset);
     offset = headers_start;
     while(offset < headers_end) {
         KeyValue header = this->get_next_key_value(data, offset);
-        // we only care about the Content-Length header, so we can just ignore the other headers
+        // we only care about the Content-Length and Connection headers, so we can just ignore the other headers
         if (header.key == "Content-Length") {
             this->content_length = std::stoi(header.value);
             // TODO: should probably use unsigned type
             assert(this->content_length > 0);
+        } else if (header.key == "Connection") {
+            this->connection_directive = ConnectionDirective(header.value);
         }
     }
 }

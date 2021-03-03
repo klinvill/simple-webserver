@@ -7,6 +7,7 @@
 #include <iostream>
 #include <fstream>
 #include <sys/stat.h>
+#include <poll.h>
 
 #include "http_message.h"
 #include "file_helpers.h"
@@ -14,14 +15,15 @@
 
 #define MAXBUF   8192  /* max I/O buffer size */
 #define LISTENQ  1024  /* second argument to listen() */
+#define CONNECTION_TIMEOUT  10000     // milliseconds to wait before closing a Keep-Alive connection
 
 #define CONTENT_ROOT "www/"     // Content directory rooted at www/
 
 int open_listenfd(int port);
-void process_request(int connfd);
+bool process_request(char* buf, int connfd, bool prev_keepalive);
 void handle_connection(void * vargp);
-void handle_get(const HttpRequestMessage& message, int connfd);
-void handle_post(const HttpRequestMessage& message, int connfd);
+void handle_get(const HttpRequestMessage& message, int connfd, ConnectionDirective connection_directive);
+void handle_post(const HttpRequestMessage& message, int connfd, ConnectionDirective connection_directive);
 
 int main(int argc, char **argv)
 {
@@ -49,7 +51,26 @@ void handle_connection(void * vargp)
 {
     int connfd = *((int *)vargp);
     free(vargp);
-    process_request(connfd);
+
+    size_t n;
+    char buf[MAXBUF];
+
+    struct pollfd poll_fds[1];
+    poll_fds[0] = (struct pollfd) {.fd=connfd, .events=POLLIN};
+    bool keepalive = false;
+
+    do {
+        n = read(connfd, buf, MAXBUF);
+        // error or connection closed on other end
+        if (n <= 0)
+            break;
+        buf[MAXBUF-1] = 0;
+
+        keepalive = process_request(buf, connfd, keepalive);
+    } while(keepalive && poll(poll_fds, 1, CONNECTION_TIMEOUT) > 0);
+
+    std::cout << "Closing connection...\n";
+    std::flush(std::cout);
     close(connfd);
 }
 
@@ -58,34 +79,45 @@ void send_response(HttpResponseMessage& response, int connfd) {
     write(connfd, response_string.c_str(), response_string.length());
 }
 
-void send_error(int connfd) {
+void send_error(int connfd, ConnectionDirective connection_directive) {
     HttpResponseMessage response(500, "Internal Server Error", ContentType::txt, std::string(),
-                                 HttpVersion(HttpVersionEnum::HTTP_1_1));
+                                 HttpVersion(HttpVersionEnum::HTTP_1_1), connection_directive);
     send_response(response, connfd);
 }
 
-void process_request(int connfd)
+// returns whether the connection should be kept alive
+bool process_request(char* buf, int connfd, bool prev_keepalive)
 {
-    size_t n;
-    char buf[MAXBUF];
-
-    n = read(connfd, buf, MAXBUF);
+    // TODO: should we preserve the value?
+    // preserve keepalive value unless given an explicit keep-alive or close directive
+    bool keepalive = prev_keepalive;
     printf("server received the following request:\n%s\n",buf);
 
     try {
         HttpRequestMessage request = HttpRequestMessage(buf);
+        // TODO: should we send Keep-alive headers back if a request doesn't set them but a previous one did?
+        // TODO: need to send with "Connection: Close" header if no keep-alive header is initially received
+        ConnectionDirective connection_directive = request.header.connection_directive;
+
+        if (connection_directive.directive == ConnectionDirectiveEnum::KEEP_ALIVE) {
+            keepalive = true;
+        } else if (connection_directive.directive == ConnectionDirectiveEnum::CLOSE) {
+            keepalive = false;
+        }
 
         if (request.header.type == RequestTypeEnum::GET)
-            handle_get(request, connfd);
+            handle_get(request, connfd, connection_directive);
         else if (request.header.type == RequestTypeEnum::POST)
-            handle_post(request, connfd);
+            handle_post(request, connfd, connection_directive);
         else
-            send_error(connfd);
+            send_error(connfd, connection_directive);
     } catch (const std::exception &err) {
         std::cerr << err.what();
-        send_error(connfd);
-        return;
+        send_error(connfd, ConnectionDirective());
+        return keepalive;
     }
+
+    return keepalive;
 }
 
 std::string join_filepath(const std::string& dir, const std::string& file) {
@@ -134,7 +166,7 @@ long get_file_size(const std::string& filepath) {
     return stat_info.st_size;
 }
 
-void handle_get(const HttpRequestMessage& message, int connfd) {
+void handle_get(const HttpRequestMessage& message, int connfd, ConnectionDirective connection_directive) {
     // TODO: this allows for path traversal attacks, should fix
     std::string relative_resource = join_filepath(CONTENT_ROOT, message.header.resource);
     std::ifstream ifs;
@@ -147,7 +179,7 @@ void handle_get(const HttpRequestMessage& message, int connfd) {
             ifs = open_default(relative_resource);
         } catch (const std::runtime_error &err) {
             std::cerr << err.what();
-            send_error(connfd);
+            send_error(connfd, connection_directive);
             return;
         }
         filename = "index.html";
@@ -163,16 +195,16 @@ void handle_get(const HttpRequestMessage& message, int connfd) {
     response_message.assign(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
 
     HttpResponseMessage response(200, "OK", from_filename(filename), response_message,
-                                 message.header.version);
+                                 message.header.version, connection_directive);
     send_response(response, connfd);
 
     ifs.close();
 }
 
-void handle_post(const HttpRequestMessage& message, int connfd) {
+void handle_post(const HttpRequestMessage& message, int connfd, ConnectionDirective connection_directive) {
     // POST requests are only supported for .html files as per the homework instructions
     if (get_extension(message.header.resource) != "html") {
-        send_error(connfd);
+        send_error(connfd, connection_directive);
         return;
     }
 
@@ -183,7 +215,7 @@ void handle_post(const HttpRequestMessage& message, int connfd) {
     std::ifstream ifs;
 
     if (!is_file(relative_resource)) {
-        send_error(connfd);
+        send_error(connfd, connection_directive);
         return;
     }
 
@@ -201,7 +233,7 @@ void handle_post(const HttpRequestMessage& message, int connfd) {
     // TODO: confirm that we should just put the post content before the loaded html file (as stated in the assignment)
     HttpResponseMessage response(200, "OK", from_filename(relative_resource),
                                  post_content_prefix + message.content + post_content_suffix + file_contents,
-                                 message.header.version);
+                                 message.header.version, connection_directive);
     send_response(response, connfd);
 
     ifs.close();
