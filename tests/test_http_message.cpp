@@ -11,14 +11,14 @@
 
 TEST(HttpResponseMessageTest, MessageBuildsHeaderFromContentLength) {
     std::string test_content = "Hello world!";
-    HttpResponseMessage test_message = HttpResponseMessage(200, "OK", ContentType::txt, test_content, HttpVersion(HttpVersionEnum::HTTP_1_1));
+    HttpResponseMessage test_message = HttpResponseMessage(200, "OK", ContentType::txt, test_content, HttpVersion(HttpVersionEnum::HTTP_1_1), ConnectionDirective());
 
     EXPECT_EQ(test_message.header.content_length, test_content.length());
 }
 
 TEST(HttpResponseMessageTest, MessageString) {
     std::string test_content = "Hello world!";
-    HttpResponseMessage test_message = HttpResponseMessage(200, "OK", ContentType::txt, test_content, HttpVersion(HttpVersionEnum::HTTP_1_1));
+    HttpResponseMessage test_message = HttpResponseMessage(200, "OK", ContentType::txt, test_content, HttpVersion(HttpVersionEnum::HTTP_1_1), ConnectionDirective());
 
     std::string expected_string ="HTTP/1.1 200 OK\r\nContent-Type: text/txt\r\nContent-Length: 12\r\n\r\nHello world!\r\n";
 
@@ -27,7 +27,7 @@ TEST(HttpResponseMessageTest, MessageString) {
 
 TEST(HttpResponseMessageTest, BuildHttp_1_0_Message) {
     std::string test_content = "Hello world!";
-    HttpResponseMessage test_message = HttpResponseMessage(200, "OK", ContentType::txt, test_content, HttpVersion(HttpVersionEnum::HTTP_1_0));
+    HttpResponseMessage test_message = HttpResponseMessage(200, "OK", ContentType::txt, test_content, HttpVersion(HttpVersionEnum::HTTP_1_0), ConnectionDirective());
 
     std::string expected_string ="HTTP/1.0 200 OK\r\nContent-Type: text/txt\r\nContent-Length: 12\r\n\r\nHello world!\r\n";
 
