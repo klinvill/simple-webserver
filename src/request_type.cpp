@@ -4,6 +4,9 @@
 
 #include "request_type.h"
 
+#include <stdexcept>
+
+
 // Throws invalid_argument exception
 RequestType::RequestType(const std::string& type) {
     if (type == "GET")

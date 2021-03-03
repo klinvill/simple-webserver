@@ -138,17 +138,19 @@ std::string join_filepath(const std::string& dir, const std::string& file) {
 }
 
 // Throws runtime_error
-std::ifstream open_default(const std::string& directory) {
-    std::ifstream dot_html_ifs(join_filepath(directory, "index.html"), std::ifstream::in);
+std::string find_default_file(const std::string& directory) {
+    std::string filepath = join_filepath(directory, "index.html");
+    std::ifstream dot_html_ifs(filepath, std::ifstream::in);
     if (!dot_html_ifs.fail())
-        return dot_html_ifs;
-    std::cerr << "Could not open " << join_filepath(directory, "index.html") << "\n";
+        return filepath;
+    std::cerr << "Could not open " << filepath << "\n";
     dot_html_ifs.close();
 
-    std::ifstream dot_htm_ifs(join_filepath(directory, "index.htm"), std::ifstream::in);
+    filepath = join_filepath(directory, "index.htm");
+    std::ifstream dot_htm_ifs(filepath, std::ifstream::in);
     if (!dot_htm_ifs.fail())
-        return dot_htm_ifs;
-    std::cerr << "Could not open " << join_filepath(directory, "index.htm") << "\n";
+        return filepath;
+    std::cerr << "Could not open " << filepath << "\n";
     dot_htm_ifs.close();
 
     throw std::runtime_error("Could not find a file to open");
@@ -180,18 +182,18 @@ void handle_get(const HttpRequestMessage& message, int connfd, ConnectionDirecti
     std::string relative_resource = join_filepath(CONTENT_ROOT, message.header.resource);
     std::ifstream ifs;
 
-    std::string filename = relative_resource;
+    std::string filepath = relative_resource;
     if (is_file(relative_resource))
         ifs.open(relative_resource, std::ifstream::in);
     else {
         try {
-            ifs = open_default(relative_resource);
+            filepath = find_default_file(relative_resource);
+            ifs.open(filepath, std::ifstream::in);
         } catch (const std::runtime_error &err) {
             std::cerr << err.what();
             send_error(connfd, connection_directive);
             return;
         }
-        filename = "index.html";
     }
 
     std::string response_message;
@@ -203,7 +205,7 @@ void handle_get(const HttpRequestMessage& message, int connfd, ConnectionDirecti
 
     response_message.assign(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
 
-    HttpResponseMessage response(200, "OK", from_filename(filename), response_message,
+    HttpResponseMessage response(200, "OK", from_filename(filepath), response_message,
                                  message.header.version, connection_directive);
     send_response(response, connfd);
 

@@ -4,6 +4,8 @@
 
 #include "connection_directive.h"
 
+#include <stdexcept>
+
 #include "string_utils.h"
 
 

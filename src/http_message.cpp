@@ -5,6 +5,8 @@
 #include "http_message.h"
 
 #include <sstream>
+#include <cstring>
+#include <cassert>
 
 
 #define FIELD_SEPARATORS " \r"
@@ -20,7 +22,7 @@ HttpResponseHeader::HttpResponseHeader(int status, std::string status_string, Co
 
 HttpResponseHeader::operator std::string() const {
     std::stringstream buf;
-    buf = std::stringstream() << std::string(this->version) << " " << this->status << " " << this->status_string << SEPARATOR
+    buf << std::string(this->version) << " " << this->status << " " << this->status_string << SEPARATOR
         << "Content-Type: " << to_string(this->content_type) << SEPARATOR
         << "Content-Length: " << this->content_length << SEPARATOR;
 
@@ -39,8 +41,8 @@ HttpResponseMessage::HttpResponseMessage(int status, std::string status_string, 
 
 HttpResponseMessage::operator std::string() const {
     std::stringstream buf;
-    buf = std::stringstream() << std::string(this->header) << SEPARATOR
-            << this->content << SEPARATOR;
+    buf << std::string(this->header) << SEPARATOR
+        << this->content << SEPARATOR;
     return buf.str();
 }
 

@@ -4,6 +4,9 @@
 
 #include "http_version.h"
 
+#include <stdexcept>
+
+
 // Throws invalid_argument exception
 HttpVersion::HttpVersion(const std::string& version) {
     if (version == "HTTP/1.0")
