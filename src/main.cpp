@@ -64,7 +64,7 @@ void handle_connection(void * vargp)
         // error or connection closed on other end
         if (n <= 0)
             break;
-        buf[MAXBUF-1] = 0;
+        buf[(n < MAXBUF-1) ? n : MAXBUF-1] = 0;
 
         keepalive = process_request(buf, connfd, keepalive);
     } while(keepalive && poll(poll_fds, 1, CONNECTION_TIMEOUT) > 0);
