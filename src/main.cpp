@@ -103,6 +103,8 @@ bool process_request(char* buf, int connfd, bool prev_keepalive)
             keepalive = true;
         } else if (connection_directive.directive == ConnectionDirectiveEnum::CLOSE) {
             keepalive = false;
+        } else if (connection_directive.directive == ConnectionDirectiveEnum::EMPTY) {
+            connection_directive = ConnectionDirective(keepalive ? "keep-alive" : "close");
         }
 
         if (request.header.type == RequestTypeEnum::GET)
