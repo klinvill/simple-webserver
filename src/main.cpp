@@ -166,6 +166,13 @@ long get_file_size(const std::string& filepath) {
     return stat_info.st_size;
 }
 
+std::string get_filepath(const std::string& resource) {
+    if (is_file(resource))
+        return resource;
+    else
+        return join_filepath(resource, "index.html");
+}
+
 void handle_get(const HttpRequestMessage& message, int connfd, ConnectionDirective connection_directive) {
     // TODO: this allows for path traversal attacks, should fix
     std::string relative_resource = join_filepath(CONTENT_ROOT, message.header.resource);
@@ -203,7 +210,9 @@ void handle_get(const HttpRequestMessage& message, int connfd, ConnectionDirecti
 
 void handle_post(const HttpRequestMessage& message, int connfd, ConnectionDirective connection_directive) {
     // POST requests are only supported for .html files as per the homework instructions
-    if (get_extension(message.header.resource) != "html") {
+    std::string resource = join_filepath(CONTENT_ROOT, message.header.resource);
+    std::string filepath = get_filepath(resource);
+    if (get_extension(filepath) != "html") {
         send_error(connfd, connection_directive);
         return;
     }
@@ -211,15 +220,14 @@ void handle_post(const HttpRequestMessage& message, int connfd, ConnectionDirect
     std::string post_content_prefix = "<h1>POST DATA</h1><pre>";
     std::string post_content_suffix = "</pre>";
 
-    std::string relative_resource = join_filepath(CONTENT_ROOT, message.header.resource);
     std::ifstream ifs;
 
-    if (!is_file(relative_resource)) {
+    if (!is_file(filepath)) {
         send_error(connfd, connection_directive);
         return;
     }
 
-    ifs.open(relative_resource, std::ifstream::in);
+    ifs.open(filepath, std::ifstream::in);
 
     std::string file_contents;
 
@@ -231,7 +239,7 @@ void handle_post(const HttpRequestMessage& message, int connfd, ConnectionDirect
     file_contents.assign(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
 
     // TODO: confirm that we should just put the post content before the loaded html file (as stated in the assignment)
-    HttpResponseMessage response(200, "OK", from_filename(relative_resource),
+    HttpResponseMessage response(200, "OK", from_filename(filepath),
                                  post_content_prefix + message.content + post_content_suffix + file_contents,
                                  message.header.version, connection_directive);
     send_response(response, connfd);
