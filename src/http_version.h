@@ -1,5 +1,5 @@
 //
-// Created by Kirby Linvill on 3/2/21.
+// Data structure for HTTP version
 //
 
 #ifndef WEBSERVER_HTTP_VERSION_H
@@ -15,8 +15,14 @@ enum class HttpVersionEnum {
 
 class HttpVersion {
 public:
+    // Parses HTTP version from a string
+    // e.g. "HTTP/1.1" -> HttpVersionEnum::HTTP_1_1
+    // Throws invalid_argument exception
     HttpVersion(const std::string& version);
     HttpVersion(HttpVersionEnum version);
+
+    // Returns string representation of HTTP version
+    // e.g. HttpVersionEnum::HTTP_1_1 -> "HTTP/1.1"
     operator std::string() const;
     bool operator ==(const HttpVersion& rhs) const {
         return this->version == rhs.version;

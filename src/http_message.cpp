@@ -1,5 +1,5 @@
 //
-// Created by Kirby Linvill on 2/25/21.
+// Data structures for HTTP Request and Response messages
 //
 
 #include "http_message.h"
@@ -9,8 +9,11 @@
 #include <cassert>
 
 
+// fields in the first header line are separated by spaces, and terminated by \r\n
 #define FIELD_SEPARATORS " \r"
+// key-value pairs in HTTP headers are separated by a colon followed by a space
 #define KEY_VALUE_SEPARATOR ": "
+// header lines are separated by \r\n
 #define SEPARATOR "\r\n"
 
 HttpResponseHeader::HttpResponseHeader(int status, std::string status_string, ContentType content_type,

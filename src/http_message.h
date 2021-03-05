@@ -1,5 +1,5 @@
 //
-// Created by Kirby Linvill on 2/25/21.
+// Data structures for HTTP Request and Response messages
 //
 
 #ifndef WEBSERVER_HTTP_MESSAGE_H
@@ -20,6 +20,7 @@ public:
                        HttpVersion version, ConnectionDirective connection_directive=ConnectionDirective());
     explicit operator std::string() const;
 
+    // status code
     int status;
     std::string status_string;
     ContentType content_type;
@@ -40,6 +41,8 @@ public:
 
 class HttpRequestHeader {
 public:
+    // parses the header from a string message
+    // can throw invalid_argument exception
     explicit HttpRequestHeader(const std::string& data);
 
     RequestType type;
@@ -49,12 +52,15 @@ public:
     ConnectionDirective connection_directive;
 
 private:
+    // helper functions to parse the string representation of a header
     static std::string get_next_field(const std::string& data, unsigned long& offset);
     static KeyValue get_next_key_value(const std::string& data, unsigned long& offset);
 };
 
 class HttpRequestMessage {
 public:
+    // parses the http message from its string representation
+    // can throw invalid_argument exception
     explicit HttpRequestMessage(const std::string& data);
 
     HttpRequestHeader header;

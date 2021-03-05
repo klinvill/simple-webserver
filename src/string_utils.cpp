@@ -1,5 +1,5 @@
 //
-// Created by Kirby Linvill on 3/2/21.
+// Miscellaneous string helpers
 //
 
 #include "string_utils.h"

@@ -39,6 +39,7 @@ int main(int argc, char **argv)
 
     listenfd = open_listenfd(port);
     while (true) {
+        // spawns a thread to handle each new connection
         connfdp = static_cast<int *>(malloc(sizeof(int)));
         *connfdp = accept(listenfd, (struct sockaddr*)&clientaddr, &clientlen);
         std::thread tmp_thread(handle_connection, connfdp);
@@ -46,7 +47,8 @@ int main(int argc, char **argv)
     }
 }
 
-/* thread routine */
+// thread routine to handle a connection
+// keeps the connection open if the request specifies keep-alive
 void handle_connection(void * vargp)
 {
     int connfd = *((int *)vargp);
@@ -57,6 +59,7 @@ void handle_connection(void * vargp)
 
     struct pollfd poll_fds[1];
     poll_fds[0] = (struct pollfd) {.fd=connfd, .events=POLLIN};
+    // default to not keeping connections alive unless specifically given a keep-alive header
     bool keepalive = false;
 
     do {
@@ -64,6 +67,7 @@ void handle_connection(void * vargp)
         // error or connection closed on other end
         if (n <= 0)
             break;
+        // ensure string is null-terminated
         buf[(n < MAXBUF-1) ? n : MAXBUF-1] = 0;
 
         keepalive = process_request(buf, connfd, keepalive);
@@ -74,29 +78,31 @@ void handle_connection(void * vargp)
     close(connfd);
 }
 
+// sends a HTTP response to the specified connection
 void send_response(HttpResponseMessage& response, int connfd) {
     std::string response_string = std::string(response);
     write(connfd, response_string.c_str(), response_string.length());
 }
 
+// sends a HTTP 500 error message to the specified connection
 void send_error(int connfd, ConnectionDirective connection_directive) {
     HttpResponseMessage response(500, "Internal Server Error", ContentType::txt, std::string(),
                                  HttpVersion(HttpVersionEnum::HTTP_1_1), connection_directive);
     send_response(response, connfd);
 }
 
-// returns whether the connection should be kept alive
+// Processes an HTTP request read as a string
+// Returns whether the connection should be kept alive
 bool process_request(char* buf, int connfd, bool prev_keepalive)
 {
-    // TODO: should we preserve the value?
     // preserve keepalive value unless given an explicit keep-alive or close directive
     bool keepalive = prev_keepalive;
     printf("server received the following request:\n%s\n",buf);
 
+    // the HttpRequestMessage parsing can throw an invalid_argument exception, the request handling can throw
+    // runtime_exceptions as well
     try {
         HttpRequestMessage request = HttpRequestMessage(buf);
-        // TODO: should we send Keep-alive headers back if a request doesn't set them but a previous one did?
-        // TODO: need to send with "Connection: Close" header if no keep-alive header is initially received
         ConnectionDirective connection_directive = request.header.connection_directive;
 
         if (connection_directive.directive == ConnectionDirectiveEnum::KEEP_ALIVE) {
@@ -104,6 +110,8 @@ bool process_request(char* buf, int connfd, bool prev_keepalive)
         } else if (connection_directive.directive == ConnectionDirectiveEnum::CLOSE) {
             keepalive = false;
         } else if (connection_directive.directive == ConnectionDirectiveEnum::EMPTY) {
+            // If no connection header is specified, we respond with a header that is consistent with the preserved
+            // keep-alive value. This means we always send explicit keep-alive headers when we keep a connection alive
             connection_directive = ConnectionDirective(keepalive ? "keep-alive" : "close");
         }
 
@@ -113,7 +121,9 @@ bool process_request(char* buf, int connfd, bool prev_keepalive)
             handle_post(request, connfd, connection_directive);
         else
             send_error(connfd, connection_directive);
-    } catch (const std::exception &err) {
+    }
+    // in the case of any error parsing or handling the request, we send a HTTP 500 message back
+    catch (const std::exception &err) {
         std::cerr << err.what();
         send_error(connfd, ConnectionDirective());
         return keepalive;
@@ -122,6 +132,8 @@ bool process_request(char* buf, int connfd, bool prev_keepalive)
     return keepalive;
 }
 
+// helper function to return a unix-style path containing both dir and file
+// e.g. join_filepath("www/images/", "/cool/cool.png") will return "www/images/cool/cool.png"
 std::string join_filepath(const std::string& dir, const std::string& file) {
     std::stringstream joined_path;
     joined_path << dir;
@@ -137,6 +149,9 @@ std::string join_filepath(const std::string& dir, const std::string& file) {
     return joined_path.str();
 }
 
+// Checks to see if index.html or index.htm are present in the given directory. If so, it returns the path to the found
+// file.
+//
 // Throws runtime_error
 std::string find_default_file(const std::string& directory) {
     std::string filepath = join_filepath(directory, "index.html");
@@ -156,6 +171,7 @@ std::string find_default_file(const std::string& directory) {
     throw std::runtime_error("Could not find a file to open");
 }
 
+// Checks if the item specified by a path is a file
 bool is_file(const std::string& filepath) {
     struct stat stat_info;
     stat(filepath.c_str(), &stat_info);
@@ -163,13 +179,8 @@ bool is_file(const std::string& filepath) {
     return S_ISREG(stat_info.st_mode);
 }
 
-long get_file_size(const std::string& filepath) {
-    struct stat stat_info;
-    stat(filepath.c_str(), &stat_info);
-
-    return stat_info.st_size;
-}
-
+// Similar to find_default_file(), but only checks if the resource is a file, and if not returns index.html
+// This is useful for the POST method which is only supported for .html files
 std::string get_filepath(const std::string& resource) {
     if (is_file(resource))
         return resource;
@@ -177,11 +188,13 @@ std::string get_filepath(const std::string& resource) {
         return join_filepath(resource, "index.html");
 }
 
+// handles HTTP GET requests by opening the requested resource and sending it back as an HTTP response
 void handle_get(const HttpRequestMessage& message, int connfd, ConnectionDirective connection_directive) {
     // TODO: this allows for path traversal attacks, should fix
     std::string relative_resource = join_filepath(CONTENT_ROOT, message.header.resource);
     std::ifstream ifs;
 
+    // tries to open the resource for reading
     std::string filepath = relative_resource;
     if (is_file(relative_resource))
         ifs.open(relative_resource, std::ifstream::in);
@@ -198,7 +211,7 @@ void handle_get(const HttpRequestMessage& message, int connfd, ConnectionDirecti
 
     std::string response_message;
 
-    // pre-allocate buffer
+    // pre-allocate buffer for performance
     ifs.seekg(0, ifs.end);
     response_message.reserve(ifs.tellg());
     ifs.seekg(0, ifs.beg);
@@ -212,6 +225,9 @@ void handle_get(const HttpRequestMessage& message, int connfd, ConnectionDirecti
     ifs.close();
 }
 
+// handles HTTP POST requests by opening the requested resource (if it refers to a .html file) and sending it back as
+// an HTTP response prepended with the string "<h1>POST DATA</h1><pre>${data_from_post_request}</pre>" where
+// "${data_from_post_request}" refers to the data in the post request.
 void handle_post(const HttpRequestMessage& message, int connfd, ConnectionDirective connection_directive) {
     // POST requests are only supported for .html files as per the homework instructions
     std::string resource = join_filepath(CONTENT_ROOT, message.header.resource);
@@ -235,14 +251,14 @@ void handle_post(const HttpRequestMessage& message, int connfd, ConnectionDirect
 
     std::string file_contents;
 
-    // pre-allocate buffer
+    // pre-allocate buffer for performance
     ifs.seekg(0, ifs.end);
     file_contents.reserve(ifs.tellg());
     ifs.seekg(0, ifs.beg);
 
     file_contents.assign(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
 
-    // TODO: confirm that we should just put the post content before the loaded html file (as stated in the assignment)
+    // sends the file contents prepended with the post data string
     HttpResponseMessage response(200, "OK", from_filename(filepath),
                                  post_content_prefix + message.content + post_content_suffix + file_contents,
                                  message.header.version, connection_directive);

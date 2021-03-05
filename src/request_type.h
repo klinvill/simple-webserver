@@ -1,5 +1,5 @@
 //
-// Created by Kirby Linvill on 2/25/21.
+// Data structure for HTTP request type (e.g. GET)
 //
 
 #ifndef WEBSERVER_REQUEST_TYPE_H
@@ -15,9 +15,16 @@ enum class RequestTypeEnum {
 
 class RequestType {
 public:
+    // Parses request type from a string
+    // e.g. "GET" -> RequestTypeEnum::GET
+    // Throws invalid_argument exception
     RequestType(const std::string& type);
     RequestType(RequestTypeEnum type);
+
+    // Converts request type to a string
+    // e.g. RequestTypeEnum::GET -> "GET"
     operator std::string() const;
+
     bool operator ==(const RequestType& rhs) const {
         return this->type == rhs.type;
     }

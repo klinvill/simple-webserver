@@ -1,5 +1,5 @@
 //
-// Created by Kirby Linvill on 3/2/21.
+// Data structure for HTTP version
 //
 
 #include "http_version.h"

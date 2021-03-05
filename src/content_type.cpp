@@ -1,5 +1,5 @@
 //
-// Created by Kirby Linvill on 2/25/21.
+// Data structure and methods for Content-Type header
 //
 
 #include "content_type.h"
