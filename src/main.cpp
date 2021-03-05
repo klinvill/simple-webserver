@@ -6,7 +6,6 @@
 #include <sstream>
 #include <iostream>
 #include <fstream>
-#include <sys/stat.h>
 #include <poll.h>
 
 #include "http_message.h"
@@ -132,23 +131,6 @@ bool process_request(char* buf, int connfd, bool prev_keepalive)
     return keepalive;
 }
 
-// helper function to return a unix-style path containing both dir and file
-// e.g. join_filepath("www/images/", "/cool/cool.png") will return "www/images/cool/cool.png"
-std::string join_filepath(const std::string& dir, const std::string& file) {
-    std::stringstream joined_path;
-    joined_path << dir;
-
-    if (dir.back() != '/')
-        joined_path << '/';
-
-    if (file.front() == '/')
-        joined_path << file.substr(1);
-    else
-        joined_path << file;
-
-    return joined_path.str();
-}
-
 // Checks to see if index.html or index.htm are present in the given directory. If so, it returns the path to the found
 // file.
 //
@@ -169,14 +151,6 @@ std::string find_default_file(const std::string& directory) {
     dot_htm_ifs.close();
 
     throw std::runtime_error("Could not find a file to open");
-}
-
-// Checks if the item specified by a path is a file
-bool is_file(const std::string& filepath) {
-    struct stat stat_info;
-    stat(filepath.c_str(), &stat_info);
-
-    return S_ISREG(stat_info.st_mode);
 }
 
 // Similar to find_default_file(), but only checks if the resource is a file, and if not returns index.html
